@@ -15,90 +15,85 @@ import (
 
 ////////
 //////// API version independent operations. Handle objects as []byte. Up to the callers to JSON encode / decode those  in an API version specific format.
-//////// These are low-level functions, to be consumed by / via version sepcific wrappers in other  packages (e.g. "nuage_v3_2", "nuage_v4_0")
+//////// These are low-level functions, to be consumed by / via version sepcific wrappers in other  packages (e.g. "nuage_v3_2", "nuage_v4_0", etc)
 ////////
 
-// DeleteEnterprise. Up to the caller to provide a valid ID
-func DeleteEnterprise(c *Connection, orgid string) ([]byte, error) {
-	reply, statuscode, err := nuagetransaction(c, "DELETE", c.Url+"/nuage/api/"+c.Apivers+"/enterprises/"+orgid, []byte(""))
+//// Generic "GET" entity. Endpoint format (ensured by the caller):
+// <entity>
+// <entity> <ID>
+// <entity> <ID> <children>
+
+func GetEntity(c *Connection, endpoint string) ([]byte, error) {
+
+	// if len(args) < 1 || len(args) > 3 {
+	// 	// log.Debugf("Nuage generic GET: len(args): %d", len(args))
+	// 	log.Debugf("Nuage GET entity: Malformed requst, invalid entity: %s", strings.Join(args, "/"))
+	// 	err := fmt.Errorf("Nuage GET entity: Malformed requst, invalid entity: %s", strings.Join(args, "/"))
+	// 	return nil, err
+	// }
+
+	reply, statuscode, err := nuagetransaction(c, "GET", c.Url+"/nuage/api/"+c.Apivers+"/"+endpoint, []byte(""))
 
 	if err != nil {
-		log.Debugf("Nuage generic: DeleteEnterprise: Unable to delete Enterprise. Error: %s", err)
-		return nil, err
-	}
-
-	if statuscode != 300 {
-		log.Debugf("Nuage generic: DeleteEnterprise: Unable to delete Enterprise. HTTP status code: %d", statuscode)
-		err = fmt.Errorf("HTTP status code: %d", statuscode)
-		return nil, err
-	}
-
-	reply, statuscode, err = nuagetransaction(c, "DELETE", c.Url+"/nuage/api/"+c.Apivers+"/enterprises/"+orgid+"/?responseChoice=1", []byte(""))
-
-	if statuscode != 204 {
-		log.Debugf("Nuage generic: DeleteEnterprise: Unable to delete Enterprise. HTTP status code: %d", statuscode)
-		err = fmt.Errorf("HTTP status code: %d", statuscode)
-		return nil, err
-	}
-
-	return reply, nil
-}
-
-// Create Enterprise. Up to the caller to encode it as a valid []byte.
-func CreateEnterprise(c *Connection, org []byte) ([]byte, error) {
-	reply, statuscode, err := nuagetransaction(c, "POST", c.Url+"/nuage/api/"+c.Apivers+"/enterprises", org)
-
-	if err != nil {
-		log.Debugf("Nuage generic: CreateEnterprise: Unable to create Enterprise. Error: %s", err)
-		return nil, err
-	}
-
-	if statuscode != 201 {
-		log.Debugf("Nuage generic: CreateEnterprise: Unable to create Enterprise. HTTP status code: %d", statuscode)
-		err = fmt.Errorf("HTTP status code: %d", statuscode)
-		return nil, err
-	}
-
-	return reply, nil
-}
-
-// // Get Enterprise by its ID. No attempt is made to verify it is a valid ID.
-// func GetEnterprise(c *Connection, orgid string) ([]byte, error) {
-//
-// 	reply, statuscode, err := nuagetransaction(c, "GET", c.Url+"/nuage/api/"+c.Apivers+"/enterprises/"+orgid, []byte(""))
-//
-// 	if err != nil {
-// 		log.Debugf("Nuage generic: GetEnterprise: Unable to get Enterprise. Error: %s", err)
-// 		return nil, err
-// 	}
-//
-// 	if statuscode != 200 {
-// 		log.Debugf("Nuage generic: GetEnterprise: Unable to get Enterprise. HTTP status code: %d", statuscode)
-// 		err = fmt.Errorf("HTTP status code: %d", statuscode)
-// 		return nil, err
-// 	}
-//
-// 	return reply, nil
-// }
-
-// Get the list of Enterprises
-func ListEnterprises(c *Connection) ([]byte, error) {
-
-	reply, statuscode, err := nuagetransaction(c, "GET", c.Url+"/nuage/api/"+c.Apivers+"/enterprises", []byte(""))
-
-	if err != nil {
-		log.Debugf("Nuage generic: ListEnterprises: Unable to list Enterprises. Error: %s", err)
+		log.Debugf("Nuage GET entity: Error: %s", err)
 		return nil, err
 	}
 
 	if statuscode != 200 {
-		log.Debugf("Nuage generic: ListEnterprises: Unable to list Enterprises. HTTP status code: %d", statuscode)
+		log.Debugf("Nuage GET entity: HTTP status code: %d", statuscode)
 		err = fmt.Errorf("HTTP status code: %d", statuscode)
 		return nil, err
 	}
 
 	return reply, nil
 
+}
+
+// Create Entity. Up to the caller to encode it as a valid "payload []byte" and select an appropriate API entity -- e.g. "enterprises"
+func CreateEntity(c *Connection, entity string, payload []byte) ([]byte, error) {
+	reply, statuscode, err := nuagetransaction(c, "POST", c.Url+"/nuage/api/"+c.Apivers+"/"+entity, payload)
+
+	if err != nil {
+		log.Debugf("Nuage CREATE entity: Unable to create entity. Error: %s", err)
+		return nil, err
+	}
+
+	if statuscode != 201 {
+		log.Debugf("Nuage CREATE entity: Unable to create entity. HTTP status code: %d", statuscode)
+		err = fmt.Errorf("HTTP status code: %d", statuscode)
+		return nil, err
+	}
+
+	return reply, nil
+}
+
+// Delete Entity. Up to the caller to provide a correct ID for the given API entity -- e.g. "enterprises"
+func DeleteEntity(c *Connection, entity string, id string) ([]byte, error) {
+	reply, statuscode, err := nuagetransaction(c, "DELETE", c.Url+"/nuage/api/"+c.Apivers+"/"+entity+"/"+id, []byte(""))
+
+Reeval:
+	if err != nil {
+		log.Debugf("Nuage DELETE: Unable to delete: %s with ID: %s", entity, id)
+		return nil, err
+	}
+
+	log.Debugf("Nuage DELETE: Assessing HTTP status code: %d", statuscode)
+	switch statuscode {
+	case 300: // Used for Enterprise delete, must confirm deletion
+		// XXX -- This works when "entity" is "enterprises"
+		// XXX -- Check if there are other delete methods (i.e. "entity") for which the HTTP status code is "300"
+		reply, statuscode, err = nuagetransaction(c, "DELETE", c.Url+"/nuage/api/"+c.Apivers+"/"+entity+"/"+id+"/?responseChoice=1", []byte(""))
+		// The reply from this should be a "204" with No content. Need to check again.
+		goto Reeval
+	case 204: // Deleted
+		return reply, nil
+	default:
+		log.Debugf("Nuage DELETE: Unable to delete: %s with ID: %s. HTTP status code: %d", entity, id, statuscode)
+		err = fmt.Errorf("HTTP status code: %d", statuscode)
+		return nil, err
+
+	}
+	return reply, err
 }
 
 ////////
@@ -143,20 +138,19 @@ func (c *Connection) Connect(org, user, pass string) error {
 	log.Debugf("Attempting to make connection to: %s", c.Url+"/nuage/api/v1_0/me")
 	resp, err := client.Do(req)
 
+	defer resp.Body.Close()
+
 	if err != nil {
 		return err
 	}
-
-	defer resp.Body.Close()
 
 	log.Debugf("Response Status: %s", resp.Status)
 	log.Debugf("Response Headers: %s", resp.Header)
 
 	if resp.StatusCode != 200 {
 		log.Debugf("VSD authentication to ["+c.Url+"/nuage/api/v1_0/me"+"] failed with status: %s", resp.Status)
-		// TBD: Convert "resp.StatusCode" to "error"
-		// return resp.StatusCode
-		return nil
+		err = fmt.Errorf("HTTP status code: %d", resp.StatusCode)
+		return err
 	}
 
 	// body, err := ioutil.ReadAll(resp.Body)
@@ -196,7 +190,7 @@ func nuagetransaction(c *Connection, method string, url string, jsonpayload []by
 	if method == "POST" && len(jsonpayload) != 0 {
 		// If we are passed a payload, encode that
 		req.Body = ioutil.NopCloser(bytes.NewBuffer(jsonpayload))
-		log.Debugf("Request payload: %s", string(jsonpayload))
+		// log.Debugf("Request payload: %s", string(jsonpayload))
 		defer req.Body.Close()
 	}
 
@@ -219,11 +213,6 @@ func nuagetransaction(c *Connection, method string, url string, jsonpayload []by
 	defer resp.Body.Close()
 
 	log.Debugf("Response Body: %s", string(body))
-
-	// if resp.StatusCode != 200 && resp.StatusCode != 201 {
-	// 	log.Debugf("Nuage API connection: [%s] to/from [%s] with payload [%s] failed with HTTP status [%s]", method, url, string(jsonpayload), resp.Status)
-	// 	return body, errors.New("HTTP status: " + resp.Status)
-	// }
 
 	return body, resp.StatusCode, nil
 }
