@@ -138,18 +138,18 @@ func (c *Connection) Connect(org, user, pass string) error {
 	log.Debugf("Attempting to make connection to: %s", c.Url+"/nuage/api/v1_0/me")
 	resp, err := client.Do(req)
 
-	defer resp.Body.Close()
-
 	if err != nil {
 		return err
 	}
+
+	defer resp.Body.Close()
 
 	log.Debugf("Response Status: %s", resp.Status)
 	log.Debugf("Response Headers: %s", resp.Header)
 
 	if resp.StatusCode != 200 {
 		log.Debugf("VSD authentication to ["+c.Url+"/nuage/api/v1_0/me"+"] failed with status: %s", resp.Status)
-		err = fmt.Errorf("HTTP status code: %d", resp.StatusCode)
+		err = fmt.Errorf("HTTP status: %s", resp.Status)
 		return err
 	}
 
